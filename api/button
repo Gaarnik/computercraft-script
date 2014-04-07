@@ -1,0 +1,55 @@
+-- Button API bu Gaarnik
+-- www.youtube.com/TheGaarnik
+
+-- VARIABLES --
+local m
+
+-- FUNCTIONS --
+function create(x, y, text, w, h)
+  if w == null then
+    w = string.len(text) + 2
+  end
+  
+  if h == null then h = 1 end
+
+  local button = {}
+  button.text = text
+  button.x = x
+  button.y = y
+  button.w = w
+  button.h = h
+  
+  m.setBackgroundColor(colors.green)
+  m.setCursorPos(x, y)
+  
+  local space = math.floor((w - string.len(text)) / 2)
+  for i=1, space do m.write(" ") end
+  m.write(text)
+  for i=1, space do m.write(" ") end
+  
+  if (w - string.len(text)) % 2 ~= 0 then
+    m.write(" ")
+  end
+  
+  m.setBackgroundColor(colors.black)
+  
+  return button
+end
+
+function isOver(button, x, y)
+  if x >= button.x and x <= (button.x + button.w) then
+    if y >= button.y and y <= (button.y + button.h) then
+      return true
+    end
+  end
+  
+  return false
+end
+
+function setMonitor(target)
+  m = target
+end
+
+function getVersion()
+  return "1.0"
+end

@@ -1,0 +1,241 @@
+--    API    --
+os.loadAPI("button")
+os.loadAPI("utils")
+
+-- CONSTANTS --
+VERSION = "1.0"
+
+MONITOR_SIDE = "left"
+
+NAME = "BSA"
+
+DEST_PER_PAGE = 6
+
+STATE_MENU = 1
+STATE_DEST = 2
+STATE_UPDATE = 3
+STATE_ACTIVATION = 4
+
+-- VARIABLES --
+local m = peripheral.wrap(MONITOR_SIDE)
+
+local timerActivation
+local timerRedstone
+
+local dest = {}
+
+local pagesCount = 1
+local currentPage = 1
+
+local state = STATE_UPDATE
+
+local activation = 0
+
+local openButton, closeButton, updateButton
+local prevPage, nextPage
+
+-- FUNCTIONS --
+function drawUI()
+  print("-- drawUI --")
+  
+  if state == STATE_MENU then
+    drawMenu()
+  elseif state == STATE_DEST then
+    drawDest()
+  elseif state == STATE_UPDATE then
+    drawUpdate()
+  elseif state == STATE_ACTIVATION then
+    drawActivation()
+  end
+end
+
+function drawMenu()
+  print("-- drawMenu --")
+  
+  m.clear()
+  
+  local title = NAME.." DHD"
+  local w, h = m.getSize()
+  local x = w / 2 - string.len(title) / 2 + 1
+  
+  m.setCursorPos(x, 2)
+  m.write(title)
+  
+  openButton = button.create(4, 6, "Open")
+  closeButton = button.create(21, 6, "Close")
+  
+  updateButton = button.create(2, 11, "Update DHD")
+  
+  m.setCursorPos(17, 12)
+  m.write("Version: "..VERSION)
+end
+
+function drawDest()
+  print("-- drawDest --")
+  
+  m.clear()
+
+  prevPage = button.create(2, 2, "Prev.")
+  nextPage = button.create(22, 2, "Next ")
+  
+  m.setCursorPos(14, 2)
+  m.write(currentPage.."/"..pagesCount)
+  
+  local line = 0
+  local x = 2
+  local y = 5
+  
+  local count = DEST_PER_PAGE
+  if count >= #dest then count = #dest end
+  
+  for i=1, count do
+    dest[i].b = button.create(x, y, dest[i].name, 12, 1)
+    x = 17
+    
+    line = line + 1
+    if line >= 2 then
+      y = y + 2
+      x = 2
+      line = 0
+    end
+  end
+end
+
+function drawUpdate()
+  print("-- drawUpdate --")
+  
+  m.clear()
+  
+  m.setCursorPos(10, 5)
+  m.write("updating ...")
+end
+
+function drawActivation()
+  print("-- drawActivation --")
+  
+  m.clear()
+  
+  m.setCursorPos(10, 5)
+  m.write("Activation ...")
+end
+
+function onTouch(x, y)
+  if state == STATE_MENU then
+    onTouchMenu(x, y)
+  elseif state == STATE_DEST then
+    onTouchDest(x, y)
+  end
+end
+
+function onTouchMenu(x, y)
+  print("-- onTouchMenu --")
+  
+  if button.isOver(openButton, x, y) then
+    state = STATE_DEST
+  elseif button.isOver(updateButton, x, y) then
+    state = STATE_UPDATE
+    refreshNetwork()
+  end
+end
+
+function onTouchDest(x, y)
+  print("-- onTouchDest --")
+  
+  for i=1, #dest do
+    if button.isOver(dest[i].b, x, y) then
+      activation = i
+    end
+  end
+  
+  if activation ~= 0 then
+    state = STATE_ACTIVATION
+    timerActivation = os.startTimer(10)
+  end
+end
+
+function refreshNetwork()
+  print("-- refreshNetwork --")
+  
+  rs.setOutput("top", true)
+  timerRedstone = os.startTimer(1.5)
+  
+  state = STATE_UPDATE
+end
+  
+function updateDestList()
+  print("-- updateDestList --")
+  
+  if fs.exists("/disk/dhd_list") == false then
+    return false
+  end
+  
+  local h = fs.open("/disk/dhd_list", "r")
+  
+  local index = 1
+  dest = {}
+  
+  while true do
+    local line = h.readLine()
+    if line == nil then
+      break
+    end
+    
+    local params = utils.split(line, ";")
+
+    if params[1] ~= NAME then
+      dest[index] = {}
+      dest[index].name = params[1]
+      dest[index].address = params[2]
+    
+      index = index + 1
+    end
+  end
+  
+  pagesCount = math.floor(#dest / DEST_PER_PAGE)
+  if #dest % DEST_PER_PAGE ~= 0 then
+    pagesCount = pagesCount + 1
+  end
+  
+  h.close()
+  
+  state = STATE_MENU
+  
+  return true
+end
+
+--   MAIN    --
+button.setMonitor(m)
+
+m.clear()
+refreshNetwork()
+drawUI()
+
+while true do
+  local e, arg1, arg2, arg3 = os.pullEvent()
+  local resetUI = false
+  
+  if e == "disk" then
+    resetUI = updateDestList()
+  elseif e == "timer" and arg1 == timerRedstone then
+    rs.setOutput("top", false)
+  elseif e == "timer" and arg1 == timerActivation then
+    activation = 0
+    resetUI = true
+  elseif e == "monitor_touch" then
+    onTouch(arg2, arg3)
+  else
+    print("Event: "..e)
+  end
+  
+  if resetUI then
+    state = STATE_MENU
+    currentPage = 1
+  end
+  
+  drawUI()
+end
+
+
+
+
+
