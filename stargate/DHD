@@ -19,6 +19,7 @@ VERSION = "1.0"
 
 MONITOR_SIDE = "left"
 STARGATE_SIDE = "stargate_1"
+REDSTONE_SIDE = "top"
 
 NAME = "Overworld 1"
 
@@ -208,7 +209,7 @@ end
 function refreshNetwork()
   print("-- refreshNetwork --")
   
-  rs.setOutput("top", true)
+  rs.setOutput(REDSTONE_SIDE, true)
   timerRedstone = os.startTimer(1.5)
   
   state = STATE_UPDATE
@@ -267,7 +268,7 @@ while true do
   if e == "disk" then
     resetUI = updateDestList()
   elseif e == "timer" and arg1 == timerRedstone then
-    rs.setOutput("top", false)
+    rs.setOutput(REDSTONE_SIDE, false)
   elseif e == "timer" and arg1 == timerActivation then
     activation = 0
     resetUI = true
