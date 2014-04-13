@@ -1,15 +1,30 @@
+-- DHD script for SG Craft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
+
 --    API    --
 os.loadAPI("button")
+if button == null or button.getVersion() ~= "1.0" then
+  print("This script require button API version 1.0")
+  return
+end
+
 os.loadAPI("utils")
+if utils == null or utils.getVersion() ~= "1.0" then
+  print("This script require utils API version 1.0")
+  return
+end
 
 -- CONSTANTS --
 VERSION = "1.0"
 
 MONITOR_SIDE = "left"
+STARGATE_SIDE = "stargate_1"
 
-NAME = "BSA"
+NAME = "Overworld 1"
 
 DEST_PER_PAGE = 6
+
+ACTIVATION_TIME = 20
 
 STATE_MENU = 1
 STATE_DEST = 2
@@ -18,6 +33,7 @@ STATE_ACTIVATION = 4
 
 -- VARIABLES --
 local m = peripheral.wrap(MONITOR_SIDE)
+local stargate = peripheral.wrap(STARGATE_SIDE)
 
 local timerActivation
 local timerRedstone
@@ -31,8 +47,13 @@ local state = STATE_UPDATE
 
 local activation = 0
 
-local openButton, closeButton, updateButton
-local prevPage, nextPage
+local openButton = button.Button("Open", 4, 6)
+local closeButton = button.Button("Close", 21, 6)
+local updateButton = button.Button("Update DHD", 2, 11)
+
+local prevPage = button.Button("Prev.", 2, 2)
+local nextPage = button.Button("Next", 22, 2)
+local backButton = button.Button("Back", 2, 11)
 
 -- FUNCTIONS --
 function drawUI()
@@ -61,13 +82,13 @@ function drawMenu()
   m.setCursorPos(x, 2)
   m.write(title)
   
-  openButton = button.create(4, 6, "Open")
-  closeButton = button.create(21, 6, "Close")
+  openButton:draw(m)
+  closeButton:draw(m)
   
-  updateButton = button.create(2, 11, "Update DHD")
+  updateButton:draw(m)
   
-  m.setCursorPos(17, 12)
-  m.write("Version: "..VERSION)
+  m.setCursorPos(25, 12)
+  m.write("V"..VERSION)
 end
 
 function drawDest()
@@ -75,9 +96,9 @@ function drawDest()
   
   m.clear()
 
-  prevPage = button.create(2, 2, "Prev.")
-  nextPage = button.create(22, 2, "Next ")
-  
+  prevPage:draw(m)
+  nextPage:draw(m)
+
   m.setCursorPos(14, 2)
   m.write(currentPage.."/"..pagesCount)
   
@@ -85,12 +106,15 @@ function drawDest()
   local x = 2
   local y = 5
   
-  local count = DEST_PER_PAGE
-  if count >= #dest then count = #dest end
-  
-  for i=1, count do
-    dest[i].b = button.create(x, y, dest[i].name, 12, 1)
-    x = 17
+  local start = (currentPage - 1) * DEST_PER_PAGE + 1
+
+  local count = start + DEST_PER_PAGE - 1
+  if count >= #dest then count = start + (#dest - start) end
+
+  for i=start, count do
+    dest[i].b = button.Button(dest[i].name, x, y, 12, 1)
+    dest[i].b:draw(m)
+    x = x + 15
     
     line = line + 1
     if line >= 2 then
@@ -99,6 +123,8 @@ function drawDest()
       line = 0
     end
   end
+
+  backButton:draw(m)
 end
 
 function drawUpdate()
@@ -115,7 +141,14 @@ function drawActivation()
   
   m.clear()
   
-  m.setCursorPos(10, 5)
+  local name = dest[activation].name
+  local w, h = m.getSize()
+  local x = w / 2 - string.len(name) / 2 + 1
+
+  m.setCursorPos(x, 5)
+  m.write(name)
+
+  m.setCursorPos(9, 7)
   m.write("Activation ...")
 end
 
@@ -130,9 +163,11 @@ end
 function onTouchMenu(x, y)
   print("-- onTouchMenu --")
   
-  if button.isOver(openButton, x, y) then
+  if openButton:isOver(x, y) then
     state = STATE_DEST
-  elseif button.isOver(updateButton, x, y) then
+  elseif closeButton:isOver(x, y) then
+    stargate.disconnect()
+  elseif updateButton:isOver(x, y) then
     state = STATE_UPDATE
     refreshNetwork()
   end
@@ -141,15 +176,32 @@ end
 function onTouchDest(x, y)
   print("-- onTouchDest --")
   
-  for i=1, #dest do
-    if button.isOver(dest[i].b, x, y) then
-      activation = i
+  if prevPage:isOver(x, y) then
+    if currentPage > 1 then currentPage = currentPage - 1 end
+  elseif nextPage:isOver(x, y) then
+    if currentPage < #dest / DEST_PER_PAGE then currentPage = currentPage + 1 end
+  elseif backButton:isOver(x, y) then
+    state = STATE_MENU
+  else
+  local start = (currentPage - 1) * DEST_PER_PAGE + 1
+
+  local count = start + DEST_PER_PAGE - 1
+  if count >= #dest then count = start + (#dest - start) end
+
+    for i=start, count do
+      local b = dest[i].b
+
+      if b:isOver(x, y) then
+        activation = i
+      end
     end
-  end
-  
-  if activation ~= 0 then
-    state = STATE_ACTIVATION
-    timerActivation = os.startTimer(10)
+    
+    if activation ~= 0 then
+      stargate.connect(dest[activation].address)
+    
+      state = STATE_ACTIVATION
+      timerActivation = os.startTimer(ACTIVATION_TIME)
+    end
   end
 end
 
@@ -204,8 +256,6 @@ function updateDestList()
 end
 
 --   MAIN    --
-button.setMonitor(m)
-
 m.clear()
 refreshNetwork()
 drawUI()
@@ -234,8 +284,3 @@ while true do
   
   drawUI()
 end
-
-
-
-
-

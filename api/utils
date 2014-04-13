@@ -1,3 +1,6 @@
+-- DHD script for SG Craft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
+
 function split(pString, pPattern)
    local Table = {}  -- NOTE: use {n = 0} in Lua-5.0
    local fpat = "(.-)" .. pPattern
@@ -15,4 +18,8 @@ function split(pString, pPattern)
           table.insert(Table, cap)
    end
    return Table
+end
+
+function getVersion()
+  return "1.0"
 end

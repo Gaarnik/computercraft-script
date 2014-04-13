@@ -1,53 +1,58 @@
--- Button API bu Gaarnik
--- www.youtube.com/TheGaarnik
+-- DHD script for SG Craft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
 
--- VARIABLES --
-local m
+-- CONSTRUCTOR --
+Button = {}
+Button.__index = Button
+
+setmetatable(Button, {
+  __call = function (cls, ...)
+    return cls.new(...)
+  end,
+})
 
 -- FUNCTIONS --
-function create(x, y, text, w, h)
+function Button.new(text, x, y, w, h)
   if w == null then
     w = string.len(text) + 2
   end
   
   if h == null then h = 1 end
 
-  local button = {}
-  button.text = text
-  button.x = x
-  button.y = y
-  button.w = w
-  button.h = h
-  
-  m.setBackgroundColor(colors.green)
-  m.setCursorPos(x, y)
-  
-  local space = math.floor((w - string.len(text)) / 2)
-  for i=1, space do m.write(" ") end
-  m.write(text)
-  for i=1, space do m.write(" ") end
-  
-  if (w - string.len(text)) % 2 ~= 0 then
-    m.write(" ")
-  end
-  
-  m.setBackgroundColor(colors.black)
-  
-  return button
+  local self = setmetatable({}, Button)
+  self.text = text
+  self.x = x
+  self.y = y
+  self.w = w
+  self.h = h
+
+  return self
 end
 
-function isOver(button, x, y)
-  if x >= button.x and x <= (button.x + button.w) then
-    if y >= button.y and y <= (button.y + button.h) then
+function Button:draw(monitor)
+  monitor.setBackgroundColor(colors.green)
+  monitor.setCursorPos(self.x, self.y)
+  
+  local space = math.floor((self.w - string.len(self.text)) / 2)
+  for i=1, space do monitor.write(" ") end
+  monitor.write(self.text)
+  for i=1, space do monitor.write(" ") end
+  
+  if (self.w - string.len(self.text)) % 2 ~= 0 then
+    monitor.write(" ")
+  end
+  
+  monitor.setBackgroundColor(colors.black)
+end
+
+function Button:isOver(x, y)
+  if x >= self.x and x <= (self.x + self.w) then
+    if y >= self.y and y <= (self.y + self.h) then
       return true
     end
   end
   
   return false
-end
-
-function setMonitor(target)
-  m = target
 end
 
 function getVersion()
