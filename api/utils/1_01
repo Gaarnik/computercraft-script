@@ -1,0 +1,61 @@
+-- utils functions for ComputerCraft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
+
+function split(pString, pPattern)
+   local Table = {}  -- NOTE: use {n = 0} in Lua-5.0
+   local fpat = "(.-)" .. pPattern
+   local last_end = 1
+   local s, e, cap = pString:find(fpat, 1)
+   while s do
+          if s ~= 1 or cap ~= "" then
+         table.insert(Table,cap)
+          end
+          last_end = e+1
+          s, e, cap = pString:find(fpat, last_end)
+   end
+   if last_end <= #pString then
+          cap = pString:sub(last_end)
+          table.insert(Table, cap)
+   end
+   return Table
+end
+
+function loadConfig(filename, config)
+  if fs.exists(filename) == false then
+    saveConfig(filename, config)
+    return false
+  end
+
+  local file = fs.open(filename, "r")
+  config = {}
+
+  while true do
+    local line = file.readLine()
+    if line == nil then
+      break
+    end
+    
+    local params = utils.split(line, "=")
+    config[params[1]] = params[2]
+  end
+
+  file.close()
+
+  return config
+end
+
+function saveConfig(filename, config)
+  local file = fs.open(filename, "w")
+
+  for i, v in pairs(config) do
+    file.writeLine(i.."="..v)
+  end
+
+  file.close()
+
+  return true
+end
+
+function getVersion()
+  return "1.01"
+end

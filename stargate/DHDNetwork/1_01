@@ -1,0 +1,86 @@
+-- DHD Network script for SG Craft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
+
+--    API    --
+os.loadAPI("utils")
+if utils == null or utils.getVersion() ~= "1.01" then
+  print("This script require utils API version 1.01")
+  return
+end
+
+-- CONSTANTS --
+VERSION = "1.01"
+
+FILENAME = "dhd_list"
+FILE_DISK = "/disk/"..FILENAME
+
+DHD_FILE = "/disk/dhd"
+
+-- VARIABLE --
+local list = {}
+
+-- FUNCTIONS --
+function loadList()
+  local h = fs.open(FILENAME, "r")
+
+  while true do
+    local line = h.readLine()
+    if line == nil then
+      break
+    end
+    
+    local params = utils.split(line, ";")
+
+    if #params == 2 then
+	  list[params[2]] = params[1]
+	end
+  end
+
+  h.close()
+end
+
+function isPresent(address)
+  for addr, name in pairs(list) do
+    if addr == address then
+      return true
+    end
+  end
+
+  return false
+end
+
+function saveList()
+  local h = fs.open(FILENAME, "w")
+
+  for addr, name in pairs(list) do
+  	h.writeLine(name..";"..addr)
+  end
+
+  h.close()
+end
+
+--   MAIN    --
+loadList()
+
+while true do
+  local e = os.pullEvent("disk")
+
+  if fs.exists(DHD_FILE) then
+    local file = fs.open(DHD_FILE, "r")
+    local dhd = file.readAll()
+    dhd = utils.split(dhd, "=")
+    file.close()
+
+    if isPresent(dhd[2]) == false then
+  	  list[dhd[2]] = dhd[1]
+  	  saveList()
+    end
+  end
+
+  shell.run("rm", FILE_DISK)
+  shell.run("cp", FILENAME, FILE_DISK)
+    
+  rs.setOutput("bottom", true)
+  sleep(1)
+  rs.setOutput("bottom", false)
+end

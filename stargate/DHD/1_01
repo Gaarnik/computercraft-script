@@ -1,0 +1,338 @@
+-- DHD script for SG Craft by Gaarnik
+-- https://github.com/Gaarnik/computercraft-script
+
+--    API    --
+os.loadAPI("button")
+if button == null or button.getVersion() ~= "1.0" then
+  print("This script require button API version 1.0")
+  return
+end
+
+os.loadAPI("utils")
+if utils == null or utils.getVersion() ~= "1.01" then
+  print("This script require utils API version 1.01")
+  return
+end
+
+-- CONSTANTS --
+VERSION = "1.01"
+
+DEST_PER_PAGE = 6
+
+MESSAGE_TIME = 2
+ACTIVATION_REFRESH = 1
+
+STATE_MENU = 1
+STATE_DEST = 2
+STATE_UPDATE = 3
+STATE_ACTIVATION = 4
+
+-- CONFIG --
+local CONFIG = {}
+CONFIG["MONITOR_SIDE"] = "left"
+CONFIG["STARGATE_SIDE"] = "stargate_1"
+CONFIG["REDSTONE_SIDE"] = "top"
+CONFIG["NAME"] = "Overworld 1"
+
+-- VARIABLES --
+local m -- monitor
+local stargate
+
+local timberMessage
+local timerActivation
+local timerRedstone
+
+local dest = {}
+
+local pagesCount = 1
+local currentPage = 1
+
+local state = STATE_UPDATE
+
+local message = ""
+
+local activation = 0
+local progress = 0
+
+local openButton = button.Button("Open", 4, 6)
+local closeButton = button.Button("Close", 21, 6)
+local updateButton = button.Button("Update DHD", 2, 11)
+
+local prevPage = button.Button("Prev.", 2, 2)
+local nextPage = button.Button("Next", 22, 2)
+local backButton = button.Button("Back", 2, 11)
+
+-- FUNCTIONS --
+function drawUI()
+  if state == STATE_MENU then
+    drawMenu()
+  elseif state == STATE_DEST then
+    drawDest()
+  elseif state == STATE_UPDATE then
+    drawUpdate()
+  elseif state == STATE_ACTIVATION then
+    drawActivation()
+  end
+end
+
+function drawMenu()
+  m.clear()
+  
+  local title = CONFIG["NAME"].." DHD"
+  local w, h = m.getSize()
+  local x = w / 2 - string.len(title) / 2 + 1
+  
+  m.setCursorPos(x, 2)
+  m.write(title)
+  
+  openButton:draw(m)
+  closeButton:draw(m)
+
+  if message ~= "" then
+    local x = w / 2 - string.len(message) / 2 + 1
+    m.setCursorPos(x, 8)
+    m.write(message)
+  end
+  
+  updateButton:draw(m)
+  
+  m.setCursorPos(25, 12)
+  m.write("V"..VERSION)
+end
+
+function drawDest()
+  m.clear()
+
+  prevPage:draw(m)
+  nextPage:draw(m)
+
+  m.setCursorPos(14, 2)
+  m.write(currentPage.."/"..pagesCount)
+  
+  local line = 0
+  local x = 2
+  local y = 5
+  
+  local start = (currentPage - 1) * DEST_PER_PAGE + 1
+
+  local count = start + DEST_PER_PAGE - 1
+  if count >= #dest then count = start + (#dest - start) end
+
+  for i=start, count do
+    dest[i].b = button.Button(dest[i].name, x, y, 12, 1)
+    dest[i].b:draw(m)
+    x = x + 15
+    
+    line = line + 1
+    if line >= 2 then
+      y = y + 2
+      x = 2
+      line = 0
+    end
+  end
+
+  backButton:draw(m)
+end
+
+function drawUpdate()
+  m.clear()
+  
+  m.setCursorPos(10, 5)
+  m.write("updating ...")
+end
+
+function drawActivation()
+  m.clear()
+  
+  local name = dest[activation].name
+  local w, h = m.getSize()
+  local x = w / 2 - string.len(name) / 2 + 1
+
+  m.setCursorPos(x, 4)
+  m.write(name)
+
+  m.setCursorPos(9, 6)
+  m.write("Activation ...")
+
+  local address = dest[activation].address
+  local x = w / 2 - string.len(address) / 2 + 1
+  local str = ""
+
+  for i=1, progress do
+    str = str..string.sub(address, i, i)
+  end
+
+  for i=1, #address - progress do
+    str = str.."-"
+  end
+
+  m.setCursorPos(x, 8)
+  m.write(str)
+end
+
+function onTouch(x, y)
+  if state == STATE_MENU then
+    onTouchMenu(x, y)
+  elseif state == STATE_DEST then
+    onTouchDest(x, y)
+  end
+end
+
+function onTouchMenu(x, y)
+  if openButton:isOver(x, y) then
+    state = STATE_DEST
+  elseif closeButton:isOver(x, y) then
+    if stargate.isConnected() then
+      stargate.disconnect()
+    else
+      setMessage("Already closed")
+    end
+  elseif updateButton:isOver(x, y) then
+    state = STATE_UPDATE
+    refreshNetwork()
+  end
+end
+
+function onTouchDest(x, y)
+  if prevPage:isOver(x, y) then
+    if currentPage > 1 then currentPage = currentPage - 1 end
+  elseif nextPage:isOver(x, y) then
+    if currentPage < #dest / DEST_PER_PAGE then currentPage = currentPage + 1 end
+  elseif backButton:isOver(x, y) then
+    state = STATE_MENU
+  else
+  local start = (currentPage - 1) * DEST_PER_PAGE + 1
+
+  local count = start + DEST_PER_PAGE - 1
+  if count >= #dest then count = start + (#dest - start) end
+
+    for i=start, count do
+      local b = dest[i].b
+
+      if b:isOver(x, y) then
+        activation = i
+      end
+    end
+    
+    if activation ~= 0 then
+      if stargate.isConnected() then
+        setMessage("Already activated")
+        return
+      end
+
+      if stargate.isValidAddress(dest[activation].address) == false then
+        setMessage("Invalid address")
+        return
+      end
+
+      stargate.connect(dest[activation].address)
+    
+      progress = 0
+      state = STATE_ACTIVATION
+      timerActivation = os.startTimer(ACTIVATION_REFRESH)
+    end
+  end
+end
+
+function refreshNetwork()
+  if fs.exists("/disk/dhd") == false then
+    file = fs.open("/disk/dhd", "w")
+    file.write(CONFIG["NAME"].."="..stargate.getHomeAddress())
+    file.close()
+  end
+
+  rs.setOutput(CONFIG["REDSTONE_SIDE"], true)
+  timerRedstone = os.startTimer(1.5)
+  
+  state = STATE_UPDATE
+end
+  
+function updateDestList()
+  if fs.exists("/disk/dhd_list") == false then
+    return false
+  end
+  
+  local h = fs.open("/disk/dhd_list", "r")
+  
+  local index = 1
+  dest = {}
+  
+  while true do
+    local line = h.readLine()
+    if line == nil then
+      break
+    end
+    
+    local params = utils.split(line, ";")
+
+    if params[1] ~= CONFIG["NAME"] then
+      dest[index] = {}
+      dest[index].name = params[1]
+      dest[index].address = params[2]
+    
+      index = index + 1
+    end
+  end
+  
+  pagesCount = math.floor(#dest / DEST_PER_PAGE)
+  if #dest % DEST_PER_PAGE ~= 0 then
+    pagesCount = pagesCount + 1
+  end
+  
+  h.close()
+  
+  state = STATE_MENU
+  
+  return true
+end
+
+function setMessage(mess)
+  message = mess
+  timberMessage = os.startTimer(MESSAGE_TIME)
+  state = STATE_MENU
+end
+
+--   MAIN    --
+CONFIG = utils.loadConfig("dhd.conf", CONFIG)
+if CONFIG == false then
+  print("Configuration has been generated, please edit it:")
+  print("=> edit dhd.conf")
+  return
+end
+
+m = peripheral.wrap(CONFIG["MONITOR_SIDE"])
+stargate = peripheral.wrap(CONFIG["STARGATE_SIDE"])
+
+m.clear()
+refreshNetwork()
+drawUI()
+
+while true do
+  local e, arg1, arg2, arg3 = os.pullEvent()
+  local resetUI = false
+  
+  if e == "disk" then
+    resetUI = updateDestList()
+  elseif e == "timer" and arg1 == timerRedstone then
+    rs.setOutput(CONFIG["REDSTONE_SIDE"], false)
+  elseif e == "timer" and arg1 == timerActivation then
+    if stargate.isConnected() then
+      activation = 0
+      resetUI = true
+    else
+      progress = stargate.getLockedChevronCount()
+      timerActivation = os.startTimer(ACTIVATION_REFRESH)
+    end
+  elseif e == "timer" and arg1 == timberMessage then
+    message = ""
+  elseif e == "monitor_touch" then
+    onTouch(arg2, arg3)
+  end
+  
+  if resetUI then
+    state = STATE_MENU
+    currentPage = 1
+  end
+  
+  drawUI()
+end
